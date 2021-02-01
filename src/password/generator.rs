@@ -1,21 +1,14 @@
-use super::diceware::Diceware;
-use super::random::Random;
+// TODO move generator to a separated module
+use super::{PasswordError, random::Random, diceware::Diceware};
 
 pub enum GenerationMethod {
     Random(usize),
     Diceware(String, usize),
 }
 
-#[allow(dead_code)]
-#[derive(Debug)]
-pub enum GeneratorError {
-    // just an unknown error for now
-    Unknown,
-}
-
 /// Generator trait
 pub trait PasswordGenerator {
-    fn generate(&self) -> Result<String, GeneratorError>;
+    fn generate(&self) -> Result<String, PasswordError>;
 }
 
 /// Main generator
@@ -24,7 +17,7 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn generate(self) -> Result<String, GeneratorError> {
+    pub fn generate(self) -> Result<String, PasswordError> {
         self.generator.generate()
     }
 }

@@ -1,8 +1,20 @@
-mod generator;
+use serde::{Serialize, Deserialize};
 
-use generator::{Generator, GenerationMethod};
+pub mod generator;
+pub(self) mod diceware;
+pub(self) mod random;
+
+pub use generator::{GenerationMethod, Generator};
 
 #[allow(dead_code)]
+#[derive(Debug)]
+pub enum PasswordError {
+    // just an unknown error for now
+    Unknown,
+    EmptyPassword,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct PasswordEntry {
     name: String,
     username: String,
@@ -12,7 +24,7 @@ pub struct PasswordEntry {
 pub struct PasswordEntryBuilder<'a> {
     name: Option<&'a str>,
     username: Option<&'a str>,
-    method: GenerationMethod
+    method: GenerationMethod,
 }
 
 
@@ -27,6 +39,10 @@ impl PasswordEntry {
             password,
         }
     }
+
+    pub(crate) fn password(&self) -> &String {
+        &self.password
+    }
 }
 
 impl<'a> PasswordEntryBuilder<'a> {
@@ -34,7 +50,7 @@ impl<'a> PasswordEntryBuilder<'a> {
         Self {
             name: None,
             username: None,
-            method: GenerationMethod::Random(32)
+            method: GenerationMethod::Random(32),
         }
     }
 
@@ -45,7 +61,7 @@ impl<'a> PasswordEntryBuilder<'a> {
         PasswordEntry {
             name: String::from(self.name.unwrap()),
             username: String::from(self.username.unwrap()),
-            password
+            password,
         }
     }
 
@@ -64,4 +80,35 @@ impl<'a> PasswordEntryBuilder<'a> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::PasswordEntryBuilder as Builder;
 
+    #[test]
+    fn random_entry() {
+        let builder = Builder::new()
+            .name("Github")
+            .username("myemail@protonmail.com")
+            .generation_method(GenerationMethod::Random(20));
+
+        let entry = builder.build();
+        println!("{:#?}", entry);
+        assert_eq!(entry.name, "Github");
+        assert_eq!(entry.username, "myemail@protonmail.com");
+        assert_eq!(entry.password.len(), 20);
+    }
+
+    #[test]
+    fn diceware_entry() {
+        let builder = Builder::new()
+            .name("Github")
+            .username("myemail@protonmail.com")
+            .generation_method(GenerationMethod::Diceware(String::from("res/diceware_wordlist.txt"),5));
+
+        let entry = builder.build();
+        println!("{:#?}", entry);
+        assert_eq!(entry.name, "Github");
+        assert_eq!(entry.username, "myemail@protonmail.com");
+    }
+}

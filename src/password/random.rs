@@ -1,6 +1,7 @@
 use rand::{rngs::OsRng, Rng};
 
-use super::generator::{GeneratorError, PasswordGenerator};
+use super::PasswordError;
+use super::generator::PasswordGenerator;
 
 /// Random password generator
 pub struct Random {
@@ -15,7 +16,7 @@ impl Random {
 }
 
 impl PasswordGenerator for Random {
-    fn generate(&self) -> Result<String, GeneratorError> {
+    fn generate(&self) -> Result<String, PasswordError> {
         let special_chars = [
             '!', '#', '$', '%', '&', '*', '+', '-', '_', '.', '/', ':', '=', '?', '~', '`',
         ];

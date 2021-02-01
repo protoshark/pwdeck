@@ -4,7 +4,8 @@ use std::io::{BufRead, BufReader};
 use rand::rngs::OsRng;
 use rand::distributions::{self, Distribution};
 
-use super::generator::{GeneratorError, PasswordGenerator};
+use super::PasswordError;
+use super::generator::PasswordGenerator;
 
 /// Diceware password generator
 pub struct Diceware {
@@ -23,7 +24,7 @@ impl Diceware {
 }
 
 impl PasswordGenerator for Diceware {
-    fn generate(&self) -> Result<String, GeneratorError> {
+    fn generate(&self) -> Result<String, PasswordError> {
         let wordlist_file =
             File::open(&self.source_path).expect("Can't open the diceware wordlist");
         let lines: Vec<String> = BufReader::new(&wordlist_file)
