@@ -1,5 +1,7 @@
-use std::io::{self, Cursor, Seek, SeekFrom, Write};
-use std::{fs::File, slice};
+use std::io::{self, Cursor, Seek, SeekFrom, Write, Read};
+use std::fs::File;
+use std::mem::size_of;
+use std::slice;
 
 use serde::{Deserialize, Serialize};
 
@@ -62,7 +64,7 @@ impl Vault {
             params.unwrap()
         };
 
-        let mut key = [0; 32];
+        let mut key = [0; KEY_SIZE];
         scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
 
         Self {
@@ -79,8 +81,64 @@ impl Vault {
 
     /// try to get the vault from the given filie
     pub fn from_file(vault_file: &mut File, master_password: &str) -> io::Result<Self> {
-        // FIXME
-        let vault = Self::new(master_password);
+        let mut buffer = Vec::new();
+        vault_file.read_to_end(&mut buffer)?;
+
+        let mut reader = Cursor::new(buffer);
+
+        let mut scrypt_metadata = [0; 1 + 2 * size_of::<u32>()];
+        reader.read_exact(&mut scrypt_metadata)?;
+
+        let scrypt_metadata_u32 = unsafe {
+            let data = &scrypt_metadata[1..];
+            let ptr = data.as_ptr() as *const u32;
+            slice::from_raw_parts(ptr, 2 * size_of::<u32>())
+        };
+
+        let scrypt_logn = scrypt_metadata[0];
+        let scrypt_r = scrypt_metadata_u32[0];
+        let scrypt_p = scrypt_metadata_u32[1];
+
+        // TODO: error handling
+        let scrypt_params = scrypt::Params::new(scrypt_logn, scrypt_r, scrypt_p).unwrap();
+
+        let nonce = {
+            let mut nonce = [0; NONCE_SIZE];
+            reader.read_exact(&mut nonce)?;
+            nonce
+        };
+
+        let salt = {
+            let mut salt = [0; SALT_SIZE];
+            reader.read_exact(&mut salt)?;
+            salt
+        };
+
+        let encrypted_schema = {
+            let mut schema = Vec::new();
+            reader.read_to_end(&mut schema)?;
+            schema
+        };
+
+
+        let mut key = [0; KEY_SIZE];
+        scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
+
+        let cipher = Aes256Gcm::new(&key.into());
+        let json_schema = cipher.decrypt(&nonce.into(), encrypted_schema.as_ref()).unwrap();
+
+        let schema = serde_json::from_str::<Schema>(std::str::from_utf8(&json_schema).unwrap()).unwrap();
+
+        let vault = Self {
+            schema,
+            master_password: String::from(master_password),
+            key: Box::new(key),
+            salt,
+
+            scrypt_logn,
+            scrypt_r,
+            scrypt_p
+        };
 
         Ok(vault)
     }
@@ -100,10 +158,9 @@ impl Vault {
     pub fn sync(&self, vault_file: &mut File) -> io::Result<()> {
         let schema = serde_json::to_string(&self.schema)?;
 
-        // transform the key into an generic array
-        let key = GenericArray::from_slice(self.key.as_ref());
         // create the aes cipher
-        let cipher = Aes256Gcm::new(&key);
+        let key = *self.key;
+        let cipher = Aes256Gcm::new(&key.into());
 
         // generate a random nonce
         let nonce = {
@@ -138,7 +195,7 @@ impl Vault {
         scrypt_metadata.write_all(unsafe {
             let data = [self.scrypt_r, self.scrypt_p];
             let ptr = data.as_ptr() as *const u8;
-            std::slice::from_raw_parts(ptr, 2 * std::mem::size_of::<u32>())
+            slice::from_raw_parts(ptr, 2 * size_of::<u32>())
         })?;
 
         file.write_all(&scrypt_metadata)?;
@@ -160,7 +217,6 @@ mod tests {
     const VAULT_PATH: &'static str = "res/debug.psm";
 
     #[test]
-    #[ignore]
     fn add_password() {
         let diceware_wordlist = "res/diceware_wordlist.txt".to_string();
 
@@ -232,7 +288,17 @@ mod tests {
         assert!(vault.is_ok());
         let vault = vault.unwrap();
 
+        println!("{:#?}", vault.schema);
         assert_eq!(vault.schema.passwords.len(), 3);
         // TODO: check if the entries match
+    }
+
+    #[test]
+    #[should_panic]
+    fn retrieve_wrong_password() {
+        // open read only
+        let mut vault_file = File::open(VAULT_PATH).unwrap();
+
+        let vault = Vault::from_file(&mut vault_file, "Wrong password").unwrap(); 
     }
 }
