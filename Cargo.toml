@@ -1,5 +1,5 @@
 [package]
-name = "passman"
+name = "pwdeck"
 version = "0.1.0"
 authors = ["Protoshark <protoshark@pm.me>"]
 edition = "2018"
