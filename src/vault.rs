@@ -56,13 +56,11 @@ impl Vault {
         let scrypt_r = 8;
         let scrypt_p = 1;
 
-        let scrypt_params = {
-            let params = scrypt::Params::new(scrypt_logn, scrypt_r, scrypt_p);
-            debug_assert!(params.is_ok());
-            params.unwrap()
-        };
+        // already tested params, should not be a problem
+        let scrypt_params = scrypt::Params::new(scrypt_logn, scrypt_r, scrypt_p).unwrap();
 
         let mut key = [0; KEY_SIZE];
+        // the params and the key length are right, so this will not panic
         scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
 
         Self {
@@ -98,7 +96,9 @@ impl Vault {
         let scrypt_p = scrypt_metadata_u32[1];
 
         // TODO: error handling
-        let scrypt_params = scrypt::Params::new(scrypt_logn, scrypt_r, scrypt_p).unwrap();
+        let scrypt_params = scrypt::Params::new(scrypt_logn, scrypt_r, scrypt_p).unwrap_or_else(|error| {
+            panic!("Scrypt error: {}", error.to_string())
+        });
 
         let nonce = {
             let mut nonce = [0; NONCE_SIZE];
@@ -118,14 +118,24 @@ impl Vault {
             schema
         };
 
-
         let mut key = [0; KEY_SIZE];
+        // the key lenght is ok, should not panic
         scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
 
         let cipher = Aes256Gcm::new(&key.into());
-        let json_schema = cipher.decrypt(&nonce.into(), encrypted_schema.as_ref()).unwrap();
+        let json_schema = cipher.decrypt(&nonce.into(), encrypted_schema.as_ref()).unwrap_or_else(|error| {
+            panic!("Decryption error: {}", error.to_string());
+        });
 
-        let schema = serde_json::from_str::<Schema>(std::str::from_utf8(&json_schema).unwrap()).unwrap();
+        let schema: Schema = {
+            let encoded_schema = String::from_utf8_lossy(&json_schema);
+            match serde_json::from_str(&encoded_schema) {
+                Ok(schema) => schema,
+                Err(error) => {
+                    panic!("Invalid json file: {}", error.to_string())
+                }
+            }
+        };
 
         let vault = Self {
             schema,
@@ -167,9 +177,11 @@ impl Vault {
             rng.fill_bytes(&mut nonce);
             nonce
         };
-        // encrypt the passwords
-        // TODO: error handling
-        let schema = cipher.encrypt(&nonce.into(), schema.as_ref()).unwrap();
+
+        // encrypt the password
+        let schema = cipher.encrypt(&nonce.into(), schema.as_ref()).unwrap_or_else(|error| {
+            panic!("Encryption error: {}", error.to_string());
+        });
 
         // write the vault metadata
         self.write_metadata(vault_file, nonce)?;
