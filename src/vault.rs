@@ -5,7 +5,7 @@ use std::slice;
 
 use serde::{Deserialize, Serialize};
 
-use aes_gcm::aead::{generic_array::GenericArray, Aead, NewAead};
+use aes_gcm::aead::{Aead, NewAead};
 use aes_gcm::Aes256Gcm;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -15,10 +15,6 @@ use crate::password::{PasswordEntry, PasswordError};
 const SALT_SIZE: usize = 32;
 const KEY_SIZE: usize = 32;
 const NONCE_SIZE: usize = 12;
-
-fn scrypt_params() -> scrypt::Params {
-    scrypt::Params::new(11, 8, 1).unwrap()
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Schema {
@@ -33,8 +29,10 @@ impl Schema {
     }
 }
 
+#[allow(dead_code)]
 pub struct Vault {
     schema: Schema,
+    // not sure if the master password should be stored
     master_password: String,
     key: Box<[u8; KEY_SIZE]>,
     salt: [u8; SALT_SIZE],
@@ -299,6 +297,6 @@ mod tests {
         // open read only
         let mut vault_file = File::open(VAULT_PATH).unwrap();
 
-        let vault = Vault::from_file(&mut vault_file, "Wrong password").unwrap(); 
+        let _ = Vault::from_file(&mut vault_file, "Wrong password"); 
     }
 }
