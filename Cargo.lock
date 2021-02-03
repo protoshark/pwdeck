@@ -178,17 +178,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
-name = "passman"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "rand",
- "scrypt",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "pbkdf2"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -221,6 +210,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e0704ee1a7e00d7bb417d0770ea303c1bccbabf0ef1667dae92b5967f5f8a71"
 dependencies = [
  "unicode-xid",
+]
+
+[[package]]
+name = "pwdeck"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "rand",
+ "scrypt",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

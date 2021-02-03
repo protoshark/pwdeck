@@ -1,7 +1,7 @@
 use rand::{rngs::OsRng, Rng};
 
-use super::PasswordError;
-use super::generator::PasswordGenerator;
+use super::PasswordGenerator;
+use crate::password::PasswordError;
 
 /// Random password generator
 pub struct Random {

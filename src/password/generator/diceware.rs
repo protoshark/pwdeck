@@ -1,11 +1,11 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-use rand::rngs::OsRng;
 use rand::distributions::{self, Distribution};
+use rand::rngs::OsRng;
 
-use super::PasswordError;
-use super::generator::PasswordGenerator;
+use super::PasswordGenerator;
+use crate::password::PasswordError;
 
 /// Diceware password generator
 pub struct Diceware {
@@ -17,9 +17,7 @@ pub struct Diceware {
 
 impl Diceware {
     pub fn new(source_path: String, words: usize) -> Self {
-        Self {
-            source_path, words
-        }
+        Self { source_path, words }
     }
 }
 

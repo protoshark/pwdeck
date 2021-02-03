@@ -1,5 +1,10 @@
-// TODO move generator to a separated module
-use super::{PasswordError, random::Random, diceware::Diceware};
+use crate::password::PasswordError;
+
+mod diceware;
+mod random;
+
+use diceware::*;
+use random::*;
 
 pub enum GenerationMethod {
     Random(usize),
@@ -11,7 +16,7 @@ pub trait PasswordGenerator {
     fn generate(&self) -> Result<String, PasswordError>;
 }
 
-/// Main generator
+/// Password Generator
 pub struct Generator {
     generator: Box<dyn PasswordGenerator>,
 }
@@ -24,13 +29,15 @@ impl Generator {
 
 impl From<GenerationMethod> for Generator {
     fn from(method: GenerationMethod) -> Self {
-        let generator: Box<dyn PasswordGenerator> = match method {
-            GenerationMethod::Random(length) => Box::new(Random::new(length)),
-            GenerationMethod::Diceware(source_path, words) => {
-                Box::new(Diceware::new(source_path, words))
+        match method {
+            GenerationMethod::Random(length) => {
+                let generator = Box::new(Random::new(length));
+                Self { generator }
             }
-        };
-
-        Self { generator }
+            GenerationMethod::Diceware(source_path, words) => {
+                let generator = Box::new(Diceware::new(source_path, words));
+                Self { generator }
+            }
+        }
     }
 }

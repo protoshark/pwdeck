@@ -1,5 +1,5 @@
-use std::io::{self, Cursor, Seek, SeekFrom, Write, Read};
 use std::fs::File;
+use std::io::{self, Cursor, Seek, SeekFrom, Write, Read};
 use std::mem::size_of;
 use std::slice;
 
@@ -10,19 +10,21 @@ use aes_gcm::Aes256Gcm;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-use crate::password::{PasswordEntry, PasswordError};
+use crate::password::{Entry, PasswordError};
 
 const SALT_SIZE: usize = 32;
 const KEY_SIZE: usize = 32;
 const NONCE_SIZE: usize = 12;
 
 #[derive(Serialize, Deserialize, Debug)]
+/// The `pwdeck` file JSON Schema
 pub struct Schema {
-    passwords: Vec<PasswordEntry>,
+    passwords: Vec<Entry>,
 }
 
-impl Schema {
-    pub fn new() -> Self {
+impl Default for Schema {
+    /// Creates an empty schema
+    fn default() -> Self {
         Self {
             passwords: Vec::new(),
         }
@@ -30,6 +32,7 @@ impl Schema {
 }
 
 #[allow(dead_code)]
+/// The Password Vault
 pub struct Vault {
     schema: Schema,
     // not sure if the master password should be stored
@@ -43,7 +46,7 @@ pub struct Vault {
 }
 
 impl Vault {
-    /// creates a new password vault
+    /// Creates a new password `Vault`
     pub fn new(master_password: &str) -> Self {
         let salt = {
             let mut salt = [0; SALT_SIZE];
@@ -64,7 +67,7 @@ impl Vault {
         scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
 
         Self {
-            schema: Schema::new(),
+            schema: Schema::default(),
             master_password: String::from(master_password),
             key: Box::new(key),
             salt,
@@ -75,7 +78,7 @@ impl Vault {
         }
     }
 
-    /// try to get the vault from the given filie
+    /// Try to get the `Vault` from a given file
     pub fn from_file(vault_file: &mut File, master_password: &str) -> io::Result<Self> {
         let mut buffer = Vec::new();
         vault_file.read_to_end(&mut buffer)?;
@@ -96,9 +99,8 @@ impl Vault {
         let scrypt_p = scrypt_metadata_u32[1];
 
         // TODO: error handling
-        let scrypt_params = scrypt::Params::new(scrypt_logn, scrypt_r, scrypt_p).unwrap_or_else(|error| {
-            panic!("Scrypt error: {}", error.to_string())
-        });
+        let scrypt_params = scrypt::Params::new(scrypt_logn, scrypt_r, scrypt_p)
+            .unwrap_or_else(|error| panic!("Scrypt error: {}", error.to_string()));
 
         let nonce = {
             let mut nonce = [0; NONCE_SIZE];
@@ -123,9 +125,11 @@ impl Vault {
         scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
 
         let cipher = Aes256Gcm::new(&key.into());
-        let json_schema = cipher.decrypt(&nonce.into(), encrypted_schema.as_ref()).unwrap_or_else(|error| {
-            panic!("Decryption error: {}", error.to_string());
-        });
+        let json_schema = cipher
+            .decrypt(&nonce.into(), encrypted_schema.as_ref())
+            .unwrap_or_else(|error| {
+                panic!("Decryption error: {}", error.to_string());
+            });
 
         let schema: Schema = {
             let encoded_schema = String::from_utf8_lossy(&json_schema);
@@ -145,14 +149,14 @@ impl Vault {
 
             scrypt_logn,
             scrypt_r,
-            scrypt_p
+            scrypt_p,
         };
 
         Ok(vault)
     }
 
-    /// add a new password to the vault
-    pub fn add_password(&mut self, entry: PasswordEntry) -> Result<(), PasswordError> {
+    /// Add a new password to the vault
+    pub fn add_password(&mut self, entry: Entry) -> Result<(), PasswordError> {
         if entry.password().len() == 0 {
             return Err(PasswordError::EmptyPassword);
         }
@@ -162,7 +166,7 @@ impl Vault {
         Ok(())
     }
 
-    /// sync the passwords with the vault file
+    /// Sync the passwords with the vault file
     pub fn sync(&self, vault_file: &mut File) -> io::Result<()> {
         let schema = serde_json::to_string(&self.schema)?;
 
@@ -179,9 +183,11 @@ impl Vault {
         };
 
         // encrypt the password
-        let schema = cipher.encrypt(&nonce.into(), schema.as_ref()).unwrap_or_else(|error| {
-            panic!("Encryption error: {}", error.to_string());
-        });
+        let schema = cipher
+            .encrypt(&nonce.into(), schema.as_ref())
+            .unwrap_or_else(|error| {
+                panic!("Encryption error: {}", error.to_string());
+            });
 
         // write the vault metadata
         self.write_metadata(vault_file, nonce)?;
@@ -191,8 +197,9 @@ impl Vault {
         Ok(())
     }
 
-    /// write the vault metadata to the file
-    /// this includes the salt and other encryption informations such as the scrypt params used
+    /// Write the vault metadata to the file.
+    /// This includes the salt and other encryption
+    /// informations such as the scrypt params used.
     /// NOTE: this will erase all the file content
     pub fn write_metadata(&self, file: &mut File, nonce: [u8; NONCE_SIZE]) -> io::Result<()> {
         // go to the start of the file
@@ -230,20 +237,23 @@ mod tests {
     fn add_password() {
         let diceware_wordlist = "res/diceware_wordlist.txt".to_string();
 
-        let p1 = PasswordEntryBuilder::new()
+        let p1 = EntryBuilder::new()
             .name("Github")
             .username("mygitusername")
             .generation_method(GenerationMethod::Random(25))
-            .build();
-        let p2 = PasswordEntryBuilder::new()
+            .build()
+            .unwrap();
+        let p2 = EntryBuilder::new()
             .name("Reddit")
             .username("myemail@mail.com")
             .generation_method(GenerationMethod::Diceware(diceware_wordlist, 4))
-            .build();
-        let p3 = PasswordEntryBuilder::new()
+            .build()
+            .unwrap();
+        let p3 = EntryBuilder::new()
             .name("Discord")
             .username("mydiscordusername")
-            .build();
+            .build()
+            .unwrap();
 
         let mut vault = Vault::new(VAULT_PASSWD);
 
@@ -259,42 +269,45 @@ mod tests {
     fn sync_file() {
         let diceware_wordlist = "res/diceware_wordlist.txt".to_string();
 
-        let p1 = PasswordEntryBuilder::new()
+        let p1 = EntryBuilder::new()
             .name("Github")
             .username("mygitusername")
             .generation_method(GenerationMethod::Random(25))
-            .build();
-        let p2 = PasswordEntryBuilder::new()
+            .build()
+            .unwrap();
+        let p2 = EntryBuilder::new()
             .name("Reddit")
             .username("myemail@mail.com")
             .generation_method(GenerationMethod::Diceware(diceware_wordlist, 4))
-            .build();
-        let p3 = PasswordEntryBuilder::new()
+            .build()
+            .unwrap();
+        let p3 = EntryBuilder::new()
             .name("Discord")
             .username("mydiscordusername")
-            .build();
-
-        // open write
-        let mut vault_file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(VAULT_PATH)
+            .build()
             .unwrap();
+
         let mut vault = Vault::new(VAULT_PASSWD);
 
         vault.add_password(p1).unwrap();
         vault.add_password(p2).unwrap();
         vault.add_password(p3).unwrap();
 
-        assert!(vault.sync(&mut vault_file).is_ok());
+        // open write
+        let mut pwdeck_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(VAULT_PATH)
+            .unwrap();
+        assert!(vault.sync(&mut pwdeck_file).is_ok());
     }
 
     #[test]
     fn retrieve_vault() {
         // open read only
-        let mut vault_file = File::open(VAULT_PATH).unwrap();
+        let mut pwdeck_file = File::open(VAULT_PATH).unwrap();
 
-        let vault = Vault::from_file(&mut vault_file, VAULT_PASSWD);
+        let vault = Vault::from_file(&mut pwdeck_file, VAULT_PASSWD);
         assert!(vault.is_ok());
         let vault = vault.unwrap();
 
@@ -307,8 +320,8 @@ mod tests {
     #[should_panic]
     fn retrieve_wrong_password() {
         // open read only
-        let mut vault_file = File::open(VAULT_PATH).unwrap();
+        let mut pwdeck_file = File::open(VAULT_PATH).unwrap();
 
-        let _ = Vault::from_file(&mut vault_file, "Wrong password"); 
+        let _ = Vault::from_file(&mut pwdeck_file, "Wrong password");
     }
 }
