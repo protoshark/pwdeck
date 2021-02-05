@@ -14,7 +14,7 @@ pub enum PasswordError {
 }
 
 // TODO: maybe move to vault module as a vault entry
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 /// Stores a password entry
 pub struct Entry {
     id: String,

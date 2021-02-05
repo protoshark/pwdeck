@@ -1,4 +1,7 @@
-use std::{fs::{File, OpenOptions}, io};
+use std::{
+    fs::{File, OpenOptions},
+    io,
+};
 
 use clap::{AppSettings, Arg, SubCommand};
 
@@ -30,62 +33,69 @@ impl<'a> CLI<'a> {
                 SubCommand::with_name("generate")
                     .setting(clap::AppSettings::DisableVersion)
                     .about("Generate a password")
-                    .arg(
-                        Arg::with_name("method")
+                    .arg(Arg::with_name("method")
                             .default_value("random")
                             .multiple(false)
                             .help("The generation method (random or diceware)")
                             .display_order(0)
-                    )
-                    .arg(
-                        Arg::with_name("size")
+                    ).arg(Arg::with_name("size")
                             .long("size")
                             .short("s")
                             .help("The size of the generated password.")
                             .long_help("The size of the generated password. For random, the default is 25 characters, and for diceware is 5 words")
                             .takes_value(true)
                             .display_order(2)
-                    )
-                    .arg(
-                        Arg::with_name("wordlist")
+                    ).arg(Arg::with_name("wordlist")
                             .long("wordlist")
                             .short("w")
                             .help("The wordlist to be used with diceware")
                             .takes_value(true)
                             .display_order(3)
                             .required_if("method", "diceware")
-                    )
-                    .display_order(0),
+                    ).display_order(0),
             )
             // pwdeck new
             .subcommand(
                 SubCommand::with_name("new")
                     .setting(clap::AppSettings::DisableVersion)
                     .about("Save a password to the vault")
-                    .arg(
-                        Arg::with_name("service")
+                    .arg(Arg::with_name("service")
                             .long("service")
                             .short("s")
                             .help("The name of the service")
                             .required(true)
                             .takes_value(true)
-                            .display_order(1),
-                    )
-                    .arg(
-                        Arg::with_name("username")
+                            .display_order(0),
+                    ).arg(Arg::with_name("username")
                             .long("username")
                             .short("u")
                             .help("The username to use")
                             .required(true)
                             .takes_value(true)
-                            .display_order(2),
+                            .display_order(1),
                     ).display_order(1),
             )
             // pwdeck list
             .subcommand(
                     SubCommand::with_name("get")
                     .setting(clap::AppSettings::DisableVersion)
-                    .about("List passwords in the vault")
+                    .about("List vault entries")
+                    .arg(Arg::with_name("id")
+                        .help("The entry ID to get the password")
+                        .takes_value(true)
+                    ).arg(Arg::with_name("service")
+                        .long("service")
+                        .short("s")
+                        .help("Filter entries matching service")
+                        .takes_value(true)
+                        .display_order(0)
+                    ).arg(Arg::with_name("username")
+                        .long("username")
+                        .short("u")
+                        .help("Filter entries matching username")
+                        .takes_value(true)
+                        .display_order(1)
+                    )
             );
         // TODO: more commands such as export, import, ...
 
@@ -159,13 +169,11 @@ fn handle_new(args: &clap::ArgMatches) {
         Err(error) => {
             match error.kind() {
                 io::ErrorKind::NotFound => {
-                    println!("Vault doesn't exists, creating a new one");
+                    println!("Vault doesn't exists, creating a new one.");
 
                     // create a new master password and confirm it
-                    let master =
-                        prompt_master("master_password: ").unwrap();
-                    let repeat =
-                        prompt_master("confirm the password: ").unwrap();
+                    let master = prompt_master("master_password: ").unwrap();
+                    let repeat = prompt_master("confirm the password: ").unwrap();
 
                     // check if the passwords matches
                     if master != repeat {
@@ -180,7 +188,7 @@ fn handle_new(args: &clap::ArgMatches) {
                         .create(true)
                         .open(&vault_path)
                         .unwrap_or_else(|error| {
-                            eprintln!("Couldn't create a new file: {}", error);
+                            eprintln!("Couldn't create a new file: {}.", error);
                             std::process::exit(1);
                         });
 
@@ -189,7 +197,7 @@ fn handle_new(args: &clap::ArgMatches) {
 
                     (vault, file)
                 }
-                error => panic!("Could not open the vault: {:?}", error),
+                error => panic!("Could not open the vault: {:?}.", error),
             }
         }
     };
@@ -221,30 +229,67 @@ fn handle_new(args: &clap::ArgMatches) {
     vault.sync(&mut vault_file).unwrap();
 }
 
-fn handle_get(_args: &clap::ArgMatches) {
+fn handle_get(args: &clap::ArgMatches) {
     let vault_path = crate::vault_path();
 
-    let mut vault_file = File::open(&vault_path).unwrap_or_else(|error| {
-        match error.kind() {
-            io::ErrorKind::NotFound => {
-                eprintln!("Vault not found: '{}'.", vault_path);
-                std::process::exit(1);
-            }
-            _ => panic!("Could not read the vault."),
+    let mut vault_file = File::open(&vault_path).unwrap_or_else(|error| match error.kind() {
+        io::ErrorKind::NotFound => {
+            eprintln!("Vault not found: '{}'.", vault_path);
+            std::process::exit(1);
         }
+        _ => panic!("Could not read the vault."),
     });
 
     let master = prompt_master("master password: ").unwrap();
-
     let vault = Vault::from_file(&mut vault_file, &master).unwrap();
 
-    let mut entries = vault.schema().passwords.clone();
+    if let Some(id) = args.value_of("id") {
+        let entries = &vault.schema().passwords;
+        let entry = entries.iter().find(|a| a.id() == id).unwrap_or_else(|| {
+            eprintln!("No entry found with this id.");
+            std::process::exit(1);
+        });
 
-    entries.sort_by(|a,b| a.name().to_lowercase().cmp(&b.name().to_lowercase()));
+        print!("{}", entry.password());
 
-    println!("\n| {: <25} | {: <16} | {: <30} |\n{}", "ID", "Service", "Username", "+---------------------------+------------------+--------------------------------+");
-    for entry in entries {
-        println!("| {: <25} | {: <16} | {: <30} |", entry.id(), entry.name(), entry.username())
+    } else {
+        let filter_service = args.value_of("service");
+        let filter_username = args.value_of("username");
+
+        let entries = &vault.schema().passwords;
+
+        let mut filtered: Vec<&Entry> = match (filter_service, filter_username) {
+            (Some(service), Some(username)) => {
+                entries.iter().filter(|e| e.name().to_lowercase() == service.to_lowercase() && e.username().to_lowercase() == username.to_lowercase()).collect()
+            }
+            (Some(service), None) => {
+                entries.iter().filter(|e| e.name().to_lowercase() == service.to_lowercase()).collect()
+            }
+            (None, Some(username)) => {
+                entries.iter().filter(|e| e.username().to_lowercase() == username.to_lowercase()).collect()
+            }
+            (None, None) => {
+                entries.iter().collect()
+            },
+        };
+
+        filtered.sort_by(|a, b| a.name().to_lowercase().cmp(&b.name().to_lowercase()));
+
+        println!(
+            "\n| {: <25} | {: <16} | {: <30} |\n{}",
+            "ID",
+            "Service",
+            "Username",
+            "+---------------------------+------------------+--------------------------------+"
+        );
+        for entry in filtered.iter() {
+            println!(
+                "| {: <25} | {: <16} | {: <30} |",
+                entry.id(),
+                entry.name(),
+                entry.username()
+            )
+        }
+        println!("")
     }
-    println!("")
 }
