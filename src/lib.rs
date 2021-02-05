@@ -1,7 +1,8 @@
 use std::{env, path::Path};
 
-mod ffi;
 pub mod cli;
+mod ffi;
+pub mod generator;
 pub mod password;
 pub mod vault;
 

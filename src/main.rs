@@ -1,7 +1,7 @@
-extern crate rand;
-extern crate nanoid;
-extern crate serde;
 extern crate clap;
+extern crate nanoid;
+extern crate rand;
+extern crate serde;
 
 use pwdeck::cli::CLI;
 

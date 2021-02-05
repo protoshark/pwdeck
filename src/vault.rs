@@ -1,7 +1,5 @@
 use std::fs::File;
-use std::io::{self, Cursor, Seek, SeekFrom, Write, Read};
-use std::mem::size_of;
-use std::slice;
+use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 
 use serde::{Deserialize, Serialize};
 
@@ -85,22 +83,17 @@ impl Vault {
 
         let mut reader = Cursor::new(buffer);
 
-        let mut scrypt_metadata = [0; 1 + 2 * size_of::<u32>()];
+        let mut scrypt_metadata = [0; 3];
         reader.read_exact(&mut scrypt_metadata)?;
 
-        let scrypt_metadata_u32 = unsafe {
-            let data = &scrypt_metadata[1..];
-            let ptr = data.as_ptr() as *const u32;
-            slice::from_raw_parts(ptr, 2 * size_of::<u32>())
-        };
-
         let scrypt_logn = scrypt_metadata[0];
-        let scrypt_r = scrypt_metadata_u32[0];
-        let scrypt_p = scrypt_metadata_u32[1];
+        let scrypt_r = scrypt_metadata[1];
+        let scrypt_p = scrypt_metadata[2];
 
         // TODO: error handling
-        let scrypt_params = scrypt::Params::new(scrypt_logn, scrypt_r, scrypt_p)
-            .unwrap_or_else(|error| panic!("Scrypt error: {}", error.to_string()));
+        let scrypt_params =
+            scrypt::Params::new(scrypt_logn, u32::from(scrypt_r), u32::from(scrypt_p))
+                .unwrap_or_else(|error| panic!("Scrypt error: {}", error.to_string()));
 
         let nonce = {
             let mut nonce = [0; NONCE_SIZE];
@@ -149,8 +142,8 @@ impl Vault {
             salt,
 
             scrypt_logn,
-            scrypt_r,
-            scrypt_p,
+            scrypt_r: u32::from(scrypt_r),
+            scrypt_p: u32::from(scrypt_p),
         };
 
         Ok(vault)
@@ -208,13 +201,7 @@ impl Vault {
         // make sure to erase the content
         file.set_len(0)?;
 
-        let mut scrypt_metadata = vec![self.scrypt_logn];
-
-        scrypt_metadata.write_all(unsafe {
-            let data = [self.scrypt_r, self.scrypt_p];
-            let ptr = data.as_ptr() as *const u8;
-            slice::from_raw_parts(ptr, 2 * size_of::<u32>())
-        })?;
+        let scrypt_metadata = [self.scrypt_logn, self.scrypt_r as u8, self.scrypt_p as u8];
 
         file.write_all(&scrypt_metadata)?;
         file.write_all(&nonce)?;
@@ -299,10 +286,7 @@ mod tests {
         vault.add_password(p3).unwrap();
 
         // open write
-        let mut pwdeck_file = OpenOptions::new()
-            .write(true)
-            .open(VAULT_PATH)
-            .unwrap();
+        let mut pwdeck_file = OpenOptions::new().write(true).open(VAULT_PATH).unwrap();
         assert!(vault.sync(&mut pwdeck_file).is_ok());
     }
 

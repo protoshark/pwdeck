@@ -6,10 +6,8 @@ use std::{
 use clap::{AppSettings, Arg, SubCommand};
 
 use crate::{
-    password::{
-        generator::{GenerationMethod, Generator},
-        Entry,
-    },
+    generator::{GenerationMethod, Generator},
+    password::Entry,
     vault::Vault,
 };
 
@@ -251,7 +249,6 @@ fn handle_get(args: &clap::ArgMatches) {
         });
 
         print!("{}", entry.password());
-
     } else {
         let filter_service = args.value_of("service");
         let filter_username = args.value_of("username");
@@ -259,18 +256,22 @@ fn handle_get(args: &clap::ArgMatches) {
         let entries = &vault.schema().passwords;
 
         let mut filtered: Vec<&Entry> = match (filter_service, filter_username) {
-            (Some(service), Some(username)) => {
-                entries.iter().filter(|e| e.name().to_lowercase() == service.to_lowercase() && e.username().to_lowercase() == username.to_lowercase()).collect()
-            }
-            (Some(service), None) => {
-                entries.iter().filter(|e| e.name().to_lowercase() == service.to_lowercase()).collect()
-            }
-            (None, Some(username)) => {
-                entries.iter().filter(|e| e.username().to_lowercase() == username.to_lowercase()).collect()
-            }
-            (None, None) => {
-                entries.iter().collect()
-            },
+            (Some(service), Some(username)) => entries
+                .iter()
+                .filter(|e| {
+                    e.name().to_lowercase() == service.to_lowercase()
+                        && e.username().to_lowercase() == username.to_lowercase()
+                })
+                .collect(),
+            (Some(service), None) => entries
+                .iter()
+                .filter(|e| e.name().to_lowercase() == service.to_lowercase())
+                .collect(),
+            (None, Some(username)) => entries
+                .iter()
+                .filter(|e| e.username().to_lowercase() == username.to_lowercase())
+                .collect(),
+            (None, None) => entries.iter().collect(),
         };
 
         filtered.sort_by(|a, b| a.name().to_lowercase().cmp(&b.name().to_lowercase()));

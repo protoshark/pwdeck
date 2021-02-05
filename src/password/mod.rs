@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub mod generator;
-
-pub use generator::{GenerationMethod, Generator};
+pub use crate::generator::{GenerationMethod, Generator};
 
 #[derive(Debug)]
 // maybe rename it?
@@ -36,7 +34,7 @@ impl Entry {
             id,
             name,
             username,
-            password
+            password,
         }
     }
     /// Get the entry id
@@ -87,11 +85,7 @@ impl<'a> EntryBuilder<'a> {
             None => return Err(PasswordError::NoUsernameProvided),
         };
 
-        Ok(Entry::new(
-            name,
-            username,
-            &password,
-        ))
+        Ok(Entry::new(name, username, &password))
     }
 
     /// Set the name of the entry
