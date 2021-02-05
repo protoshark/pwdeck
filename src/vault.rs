@@ -19,7 +19,7 @@ const NONCE_SIZE: usize = 12;
 #[derive(Serialize, Deserialize, Debug)]
 /// The `pwdeck` file JSON Schema
 pub struct Schema {
-    passwords: Vec<Entry>,
+    pub(crate) passwords: Vec<Entry>,
 }
 
 impl Default for Schema {
@@ -127,8 +127,9 @@ impl Vault {
         let cipher = Aes256Gcm::new(&key.into());
         let json_schema = cipher
             .decrypt(&nonce.into(), encrypted_schema.as_ref())
-            .unwrap_or_else(|error| {
-                panic!("Decryption error: {}", error.to_string());
+            .unwrap_or_else(|_error| {
+                eprintln!("Authentication failed");
+                std::process::exit(1);
             });
 
         let schema: Schema = {
@@ -221,6 +222,10 @@ impl Vault {
 
         Ok(())
     }
+
+    pub fn schema(&self) -> &Schema {
+        &self.schema
+    }
 }
 
 #[cfg(test)]
@@ -296,7 +301,6 @@ mod tests {
         // open write
         let mut pwdeck_file = OpenOptions::new()
             .write(true)
-            .create(true)
             .open(VAULT_PATH)
             .unwrap();
         assert!(vault.sync(&mut pwdeck_file).is_ok());

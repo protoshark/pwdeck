@@ -12,3 +12,6 @@ serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
 aes-gcm = "0.8"
 scrypt = { version = "0.6", default-features = false }
+clap = { version = "2.33.3", features = ["color", "vec_map"], default-features = false }
+rpassword = "5.0"
+nanoid = "0.3.0"

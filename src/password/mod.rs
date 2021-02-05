@@ -14,9 +14,10 @@ pub enum PasswordError {
 }
 
 // TODO: maybe move to vault module as a vault entry
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 /// Stores a password entry
 pub struct Entry {
+    id: String,
     name: String,
     username: String,
     password: String,
@@ -24,6 +25,24 @@ pub struct Entry {
 
 #[allow(dead_code)] // suppress warnings for now
 impl Entry {
+    pub fn new(service: &str, username: &str, password: &str) -> Self {
+        let id = nanoid::nanoid!();
+
+        let name = String::from(service);
+        let username = String::from(username);
+        let password = String::from(password);
+
+        Self {
+            id,
+            name,
+            username,
+            password
+        }
+    }
+    /// Get the entry id
+    pub(crate) fn id(&self) -> &String {
+        &self.id
+    }
     /// Get the entry name
     pub(crate) fn name(&self) -> &String {
         &self.name
@@ -58,21 +77,21 @@ impl<'a> EntryBuilder<'a> {
         let generator = Generator::from(self.method);
         let password = generator.generate().unwrap();
 
-        let name = String::from(match self.name {
+        let name = match self.name {
             Some(name) => name,
             None => return Err(PasswordError::NoNameProvided),
-        });
+        };
 
-        let username = String::from(match self.username {
+        let username = match self.username {
             Some(username) => username,
             None => return Err(PasswordError::NoUsernameProvided),
-        });
+        };
 
-        Ok(Entry {
+        Ok(Entry::new(
             name,
             username,
-            password,
-        })
+            &password,
+        ))
     }
 
     /// Set the name of the entry

@@ -1,3 +1,10 @@
+extern crate rand;
+extern crate nanoid;
+extern crate serde;
+extern crate clap;
+
+use pwdeck::cli::CLI;
+
 fn main() {
-    println!("Enter the password")
+    let _ = CLI::from_args().run();
 }
