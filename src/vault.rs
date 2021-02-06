@@ -295,6 +295,43 @@ mod tests {
 
     #[test]
     fn retrieve_vault() {
+        {
+            let diceware_wordlist = "res/diceware_wordlist.txt".to_string();
+
+            let p1 = EntryBuilder::new()
+                .name("Github")
+                .username("mygitusername")
+                .generation_method(GenerationMethod::Random(25))
+                .build()
+                .unwrap();
+            let p2 = EntryBuilder::new()
+                .name("Reddit")
+                .username("myemail@mail.com")
+                .generation_method(GenerationMethod::Diceware(diceware_wordlist, 4))
+                .build()
+                .unwrap();
+            let p3 = EntryBuilder::new()
+                .name("Discord")
+                .username("mydiscordusername")
+                .build()
+                .unwrap();
+
+            let mut vault = Vault::new(VAULT_PASSWD);
+
+            vault.add_password(p1).unwrap();
+            vault.add_password(p2).unwrap();
+            vault.add_password(p3).unwrap();
+
+            // open write
+            let mut pwdeck_file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(VAULT_PATH)
+                .unwrap();
+
+            vault.sync(&mut pwdeck_file).unwrap();
+        }
+
         // open read only
         let mut pwdeck_file = File::open(VAULT_PATH).unwrap();
 
