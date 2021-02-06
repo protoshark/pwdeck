@@ -50,18 +50,18 @@ pwdeck generate
 3/++Zf2VPjJZqK1/=8oRo?h4=
 ```
 
-<sup><sup>You can use the `--size` flag to change the password length.</sup></sup>
+<sup>You can use the `--size` flag to change the password length.</sup>
 
 `pwdeck` also allow you to generate passwords using the [diceware](https://en.wikipedia.org/wiki/Diceware) alghorithm
 (which, in short, rolls some dices and map their values with some word).
 
-<sup><sup>You need to pass a wordlist file with the `--wordlist` flag.</sup></sup>
+<sup>You need to pass a wordlist file with the `--wordlist` flag.</sup>
 
 ```
 pwdeck generate diceware -w path/to/diceware/wordlist
 ```
 
-<sup><sup>You can also pass the `--size` flag to change the amount of words.</sup></sup>
+<sup>You can also pass the `--size` flag to change the amount of words.</sup>
 
 ### Storing passwords
 
