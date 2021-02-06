@@ -285,7 +285,11 @@ mod tests {
         vault.add_password(p3).unwrap();
 
         // open write
-        let mut pwdeck_file = OpenOptions::new().write(true).create(true).open(VAULT_PATH).unwrap();
+        let mut pwdeck_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(VAULT_PATH)
+            .unwrap();
         assert!(vault.sync(&mut pwdeck_file).is_ok());
     }
 
