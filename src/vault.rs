@@ -117,12 +117,11 @@ impl Vault {
         // the key lenght is ok, should not panic
         scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
 
-        let cipher = Aes256Gcm::new(&key.into());
+        let cipher = Aes256Gcm::new(key.as_ref().into());
         let json_schema = cipher
             .decrypt(&nonce.into(), encrypted_schema.as_ref())
             .unwrap_or_else(|_error| {
-                eprintln!("Authentication failed");
-                std::process::exit(1);
+                panic!("Authentication failed");
             });
 
         let schema: Schema = {
@@ -166,7 +165,7 @@ impl Vault {
 
         // create the aes cipher
         let key = *self.key;
-        let cipher = Aes256Gcm::new(&key.into());
+        let cipher = Aes256Gcm::new(key.as_ref().into());
 
         // generate a random nonce
         let nonce = {
@@ -223,7 +222,7 @@ mod tests {
     use crate::password::*;
 
     const VAULT_PASSWD: &'static str = "SuPeRsEcReTkEy";
-    const VAULT_PATH: &'static str = "res/debug.psm";
+    const VAULT_PATH: &'static str = "target/debug.deck";
 
     #[test]
     fn add_password() {
@@ -286,7 +285,7 @@ mod tests {
         vault.add_password(p3).unwrap();
 
         // open write
-        let mut pwdeck_file = OpenOptions::new().write(true).open(VAULT_PATH).unwrap();
+        let mut pwdeck_file = OpenOptions::new().write(true).create(true).open(VAULT_PATH).unwrap();
         assert!(vault.sync(&mut pwdeck_file).is_ok());
     }
 
@@ -301,7 +300,6 @@ mod tests {
 
         println!("{:#?}", vault.schema);
         assert_eq!(vault.schema.passwords.len(), 3);
-        // TODO: check if the entries match
     }
 
     #[test]
@@ -310,6 +308,6 @@ mod tests {
         // open read only
         let mut pwdeck_file = File::open(VAULT_PATH).unwrap();
 
-        let _ = Vault::from_file(&mut pwdeck_file, "Wrong password");
+        let _ = Vault::from_file(&mut pwdeck_file, "Wrong password").unwrap();
     }
 }
