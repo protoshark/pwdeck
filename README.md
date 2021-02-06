@@ -6,7 +6,7 @@
 
 ## What is this
 
-`pwdeck` is an tool to manage and generate passwords.
+`pwdeck` is a tool to manage and generate passwords.
 It is designed to be simple and secure.
 
 This project is made with educational purposes, so, it's not recommended for daily usage.
