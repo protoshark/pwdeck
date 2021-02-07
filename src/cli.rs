@@ -222,7 +222,7 @@ fn handle_new(args: &clap::ArgMatches) {
     let entry = Entry::new(username, &password);
 
     // add the new entry to the vault
-    vault.add_password(service, entry).unwrap();
+    vault.insert_entry(service, entry).unwrap();
     // sync the file
     vault.sync(&mut vault_file).unwrap();
 }

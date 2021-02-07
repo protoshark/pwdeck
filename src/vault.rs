@@ -1,5 +1,8 @@
-use std::{io::{self, Cursor, Read, Seek, SeekFrom, Write}, ops::Deref};
 use std::{collections::HashMap, fs::File};
+use std::{
+    io::{self, Cursor, Read, Seek, SeekFrom, Write},
+    ops::Deref,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -8,7 +11,10 @@ use aes_gcm::Aes256Gcm;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-use crate::{password::{Entry, PasswordError}, security::{SecString, SecVec}};
+use crate::{
+    password::{Entry, PasswordError},
+    security::{SecString, SecVec},
+};
 
 const SALT_SIZE: usize = 32;
 const KEY_SIZE: usize = 32;
@@ -156,7 +162,7 @@ impl Vault {
     }
 
     /// Add a new password to the vault
-    pub fn add_password(&mut self, group: &str, entry: Entry) -> Result<(), PasswordError> {
+    pub fn insert_entry(&mut self, group: &str, entry: Entry) -> Result<(), PasswordError> {
         if entry.password().len() == 0 {
             return Err(PasswordError::EmptyPassword);
         }
@@ -237,20 +243,39 @@ mod tests {
     use super::*;
     use crate::password::*;
 
-    const VAULT_PASSWD: &'static str = "SuPeRsEcReTkEy";
+    const VAULT_PASSWD: &'static str = "123";
     const VAULT_PATH: &'static str = "target/debug.deck";
 
-    #[test]
-    fn add_password() {
-        let p1 = Entry::new("mygitusername", "foo");
-        let p2 = Entry::new("myemail@mail.com", "bar");
-        let p3 = Entry::new("mydiscordusername", "baz");
+    fn test_vault() -> Vault {
+        let mut test_entries = HashMap::new();
+
+        test_entries.insert(
+            "Reddit",
+            vec![Entry::new("user1", "321foo"), Entry::new("user2", "123bar")],
+        );
+        test_entries.insert("Github", vec![Entry::new("foo@email.com", "baz")]);
+        test_entries.insert(
+            "Google",
+            vec![
+                Entry::new("main", "password"),
+                Entry::new("secondary", "password"),
+            ],
+        );
 
         let mut vault = Vault::new(VAULT_PASSWD);
 
-        vault.add_password("Github", p1).unwrap();
-        vault.add_password("Reddit", p2).unwrap();
-        vault.add_password("Discord", p3).unwrap();
+        for (group, entries) in test_entries.iter() {
+            for entry in entries.iter() {
+                vault.insert_entry(group, entry.clone()).unwrap();
+            }
+        }
+
+        vault
+    }
+
+    #[test]
+    fn insert_entry() {
+        let vault = test_vault();
 
         println!("{:#?}", vault.schema);
         assert_eq!(vault.schema.passwords.len(), 3);
@@ -258,15 +283,7 @@ mod tests {
 
     #[test]
     fn sync_file() {
-        let p1 = Entry::new("mygitusername", "foo");
-        let p2 = Entry::new("myemail@mail.com", "bar");
-        let p3 = Entry::new("mydiscordusername", "baz");
-
-        let mut vault = Vault::new(VAULT_PASSWD);
-
-        vault.add_password("Github", p1).unwrap();
-        vault.add_password("Reddit", p2).unwrap();
-        vault.add_password("Discord", p3).unwrap();
+        let vault = test_vault();
 
         // open write
         let mut pwdeck_file = OpenOptions::new()
@@ -281,15 +298,7 @@ mod tests {
     #[test]
     fn retrieve_vault() {
         {
-            let p1 = Entry::new("mygitusername", "foo");
-            let p2 = Entry::new("myemail@mail.com", "bar");
-            let p3 = Entry::new("mydiscordusername", "baz");
-
-            let mut vault = Vault::new(VAULT_PASSWD);
-
-            vault.add_password("Github", p1).unwrap();
-            vault.add_password("Reddit", p2).unwrap();
-            vault.add_password("Discord", p3).unwrap();
+            let vault = test_vault();
 
             // open write
             let mut pwdeck_file = OpenOptions::new()
