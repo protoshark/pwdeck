@@ -4,13 +4,48 @@ use std::{fmt, ptr};
 use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 
+/// SecVec automatically overwrites its data from memory when dropped
+pub struct SecVec<T> {
+    data: Vec<T>,
+}
+
+impl<T> SecVec<T> {
+    pub fn new(vec: Vec<T>) -> Self {
+        Self { data: vec }
+    }
+}
+
+impl<T> Deref for SecVec<T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<T> From<Vec<T>> for SecVec<T> {
+    fn from(vec: Vec<T>) -> Self {
+        Self::new(vec)
+    }
+}
+
+impl<T> Drop for SecVec<T> {
+    fn drop(&mut self) {
+        unsafe {
+            ptr::write_volatile(self.data.as_mut_ptr() as *mut u8, 0);
+        }
+        self.data.clear();
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
+/// SecString automatically overwrites its data from memory when dropped
 pub struct SecString {
     data: String,
 }
 
 impl SecString {
-    fn new(data: String) -> Self {
+    pub fn new(data: String) -> Self {
         Self { data }
     }
 }
@@ -40,6 +75,7 @@ impl Drop for SecString {
         unsafe {
             ptr::write_volatile(self.data.as_mut_ptr(), 0);
         }
+        self.data.clear();
     }
 }
 

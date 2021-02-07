@@ -1,4 +1,4 @@
-use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
+use std::{io::{self, Cursor, Read, Seek, SeekFrom, Write}, ops::Deref};
 use std::{collections::HashMap, fs::File};
 
 use serde::{Deserialize, Serialize};
@@ -8,11 +8,15 @@ use aes_gcm::Aes256Gcm;
 use rand::rngs::OsRng;
 use rand::RngCore;
 
-use crate::password::{Entry, PasswordError};
+use crate::{password::{Entry, PasswordError}, security::{SecString, SecVec}};
 
 const SALT_SIZE: usize = 32;
 const KEY_SIZE: usize = 32;
 const NONCE_SIZE: usize = 12;
+
+const SCRYPT_LOGN: u8 = 12;
+const SCRYPT_R: u32 = 8;
+const SCRYPT_P: u32 = 1;
 
 #[derive(Serialize, Deserialize, Debug)]
 /// The `pwdeck` file JSON Schema
@@ -33,9 +37,10 @@ impl Default for Schema {
 /// The Password Vault
 pub struct Vault {
     schema: Schema,
+
     // not sure if the master password should be stored
-    master_password: String,
-    key: Box<[u8; KEY_SIZE]>,
+    master_password: SecString,
+    key: SecVec<u8>,
     salt: [u8; SALT_SIZE],
 
     scrypt_logn: u8,
@@ -53,21 +58,22 @@ impl Vault {
             salt
         };
 
-        let scrypt_logn = 11;
-        let scrypt_r = 8;
-        let scrypt_p = 1;
+        let scrypt_logn = SCRYPT_LOGN;
+        let scrypt_r = SCRYPT_R;
+        let scrypt_p = SCRYPT_P;
 
         // already tested params, should not be a problem
         let scrypt_params = scrypt::Params::new(scrypt_logn, scrypt_r, scrypt_p).unwrap();
 
-        let mut key = [0; KEY_SIZE];
+        let mut key = vec![0; KEY_SIZE];
         // the params and the key length are right, so this will not panic
         scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
 
         Self {
             schema: Schema::default(),
-            master_password: String::from(master_password),
-            key: Box::new(key),
+
+            master_password: master_password.into(),
+            key: key.into(),
             salt,
 
             scrypt_logn,
@@ -113,11 +119,11 @@ impl Vault {
             schema
         };
 
-        let mut key = [0; KEY_SIZE];
+        let mut key = vec![0; KEY_SIZE];
         // the key lenght is ok, should not panic
         scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
 
-        let cipher = Aes256Gcm::new(key.as_ref().into());
+        let cipher = Aes256Gcm::new(key.deref().as_ref().into());
         let json_schema = cipher
             .decrypt(&nonce.into(), encrypted_schema.as_ref())
             .unwrap_or_else(|_error| {
@@ -136,8 +142,9 @@ impl Vault {
 
         let vault = Self {
             schema,
-            master_password: String::from(master_password),
-            key: Box::new(key),
+
+            master_password: master_password.into(),
+            key: key.into(),
             salt,
 
             scrypt_logn,
@@ -173,8 +180,8 @@ impl Vault {
         let schema = serde_json::to_string(&self.schema)?;
 
         // create the aes cipher
-        let key = *self.key;
-        let cipher = Aes256Gcm::new(key.as_ref().into());
+        let key = self.key.deref().as_slice();
+        let cipher = Aes256Gcm::new(key.into());
 
         // generate a random nonce
         let nonce = {
