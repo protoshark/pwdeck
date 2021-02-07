@@ -4,7 +4,7 @@ pub mod cli;
 mod ffi;
 pub mod generator;
 pub mod password;
-mod security;
+pub mod security;
 pub mod vault;
 
 // TODO: proper vault path
