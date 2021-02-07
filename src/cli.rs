@@ -219,10 +219,10 @@ fn handle_new(args: &clap::ArgMatches) {
     };
 
     // create the entry
-    let entry = Entry::new(service, username, &password);
+    let entry = Entry::new(username, &password);
 
     // add the new entry to the vault
-    vault.add_password(entry).unwrap();
+    vault.add_password(service, entry).unwrap();
     // sync the file
     vault.sync(&mut vault_file).unwrap();
 }
@@ -241,56 +241,29 @@ fn handle_get(args: &clap::ArgMatches) {
     let master = prompt_master("master password: ").unwrap();
     let vault = Vault::from_file(&mut vault_file, &master).unwrap();
 
-    if let Some(id) = args.value_of("id") {
-        let entries = &vault.schema().passwords;
-        let entry = entries.iter().find(|a| a.id() == id).unwrap_or_else(|| {
-            eprintln!("No entry found with this id.");
-            std::process::exit(1);
-        });
+    if let Some(_id) = args.value_of("id") {
+        // let entries = &vault.schema().passwords;
+        // let entry = entries.iter().find(|a| a.id() == id).unwrap_or_else(|| {
+        //     eprintln!("No entry found with this id.");
+        //     std::process::exit(1);
+        // });
 
-        print!("{}", entry.password());
+        // print!("{}", *entry.password().deref());
     } else {
-        let filter_service = args.value_of("service");
-        let filter_username = args.value_of("username");
+        let _filter_service = args.value_of("service");
+        let _filter_username = args.value_of("username");
 
         let entries = &vault.schema().passwords;
 
-        let mut filtered: Vec<&Entry> = match (filter_service, filter_username) {
-            (Some(service), Some(username)) => entries
-                .iter()
-                .filter(|e| {
-                    e.name().to_lowercase() == service.to_lowercase()
-                        && e.username().to_lowercase() == username.to_lowercase()
-                })
-                .collect(),
-            (Some(service), None) => entries
-                .iter()
-                .filter(|e| e.name().to_lowercase() == service.to_lowercase())
-                .collect(),
-            (None, Some(username)) => entries
-                .iter()
-                .filter(|e| e.username().to_lowercase() == username.to_lowercase())
-                .collect(),
-            (None, None) => entries.iter().collect(),
-        };
-
-        filtered.sort_by(|a, b| a.name().to_lowercase().cmp(&b.name().to_lowercase()));
-
-        println!(
-            "\n| {: <25} | {: <16} | {: <30} |\n{}",
-            "ID",
-            "Service",
-            "Username",
-            "+---------------------------+------------------+--------------------------------+"
-        );
-        for entry in filtered.iter() {
-            println!(
-                "| {: <25} | {: <16} | {: <30} |",
-                entry.id(),
-                entry.name(),
-                entry.username()
-            )
+        for (group, entries) in entries.iter() {
+            println!("{}:", group);
+            let last_entry = entries.len().saturating_sub(1);
+            for (i, entry) in entries.iter().enumerate() {
+                let tree_char = if i < last_entry { '├' } else { '└' };
+                println!("  {}── {}", tree_char, entry.name());
+            }
         }
+
         println!("")
     }
 }

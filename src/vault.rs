@@ -1,5 +1,5 @@
-use std::fs::File;
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
+use std::{collections::HashMap, fs::File};
 
 use serde::{Deserialize, Serialize};
 
@@ -17,14 +17,14 @@ const NONCE_SIZE: usize = 12;
 #[derive(Serialize, Deserialize, Debug)]
 /// The `pwdeck` file JSON Schema
 pub struct Schema {
-    pub(crate) passwords: Vec<Entry>,
+    pub(crate) passwords: HashMap<String, Vec<Entry>>,
 }
 
 impl Default for Schema {
     /// Creates an empty schema
     fn default() -> Self {
         Self {
-            passwords: Vec::new(),
+            passwords: HashMap::new(),
         }
     }
 }
@@ -149,12 +149,21 @@ impl Vault {
     }
 
     /// Add a new password to the vault
-    pub fn add_password(&mut self, entry: Entry) -> Result<(), PasswordError> {
+    pub fn add_password(&mut self, group: &str, entry: Entry) -> Result<(), PasswordError> {
         if entry.password().len() == 0 {
             return Err(PasswordError::EmptyPassword);
         }
 
-        self.schema.passwords.push(entry);
+        if let Some(group_entries) = self.schema.passwords.get_mut(group) {
+            group_entries.push(entry);
+        } else {
+            // the key doesn't exists so its safe to just unwrap
+            assert!(self
+                .schema
+                .passwords
+                .insert(String::from(group), vec![entry])
+                .is_none())
+        }
 
         Ok(())
     }
@@ -226,31 +235,15 @@ mod tests {
 
     #[test]
     fn add_password() {
-        let diceware_wordlist = "res/diceware_wordlist.txt".to_string();
-
-        let p1 = EntryBuilder::new()
-            .name("Github")
-            .username("mygitusername")
-            .generation_method(GenerationMethod::Random(25))
-            .build()
-            .unwrap();
-        let p2 = EntryBuilder::new()
-            .name("Reddit")
-            .username("myemail@mail.com")
-            .generation_method(GenerationMethod::Diceware(diceware_wordlist, 4))
-            .build()
-            .unwrap();
-        let p3 = EntryBuilder::new()
-            .name("Discord")
-            .username("mydiscordusername")
-            .build()
-            .unwrap();
+        let p1 = Entry::new("mygitusername", "foo");
+        let p2 = Entry::new("myemail@mail.com", "bar");
+        let p3 = Entry::new("mydiscordusername", "baz");
 
         let mut vault = Vault::new(VAULT_PASSWD);
 
-        vault.add_password(p1).unwrap();
-        vault.add_password(p2).unwrap();
-        vault.add_password(p3).unwrap();
+        vault.add_password("Github", p1).unwrap();
+        vault.add_password("Reddit", p2).unwrap();
+        vault.add_password("Discord", p3).unwrap();
 
         println!("{:#?}", vault.schema);
         assert_eq!(vault.schema.passwords.len(), 3);
@@ -258,31 +251,15 @@ mod tests {
 
     #[test]
     fn sync_file() {
-        let diceware_wordlist = "res/diceware_wordlist.txt".to_string();
-
-        let p1 = EntryBuilder::new()
-            .name("Github")
-            .username("mygitusername")
-            .generation_method(GenerationMethod::Random(25))
-            .build()
-            .unwrap();
-        let p2 = EntryBuilder::new()
-            .name("Reddit")
-            .username("myemail@mail.com")
-            .generation_method(GenerationMethod::Diceware(diceware_wordlist, 4))
-            .build()
-            .unwrap();
-        let p3 = EntryBuilder::new()
-            .name("Discord")
-            .username("mydiscordusername")
-            .build()
-            .unwrap();
+        let p1 = Entry::new("mygitusername", "foo");
+        let p2 = Entry::new("myemail@mail.com", "bar");
+        let p3 = Entry::new("mydiscordusername", "baz");
 
         let mut vault = Vault::new(VAULT_PASSWD);
 
-        vault.add_password(p1).unwrap();
-        vault.add_password(p2).unwrap();
-        vault.add_password(p3).unwrap();
+        vault.add_password("Github", p1).unwrap();
+        vault.add_password("Reddit", p2).unwrap();
+        vault.add_password("Discord", p3).unwrap();
 
         // open write
         let mut pwdeck_file = OpenOptions::new()
@@ -290,37 +267,22 @@ mod tests {
             .create(true)
             .open(VAULT_PATH)
             .unwrap();
+
         assert!(vault.sync(&mut pwdeck_file).is_ok());
     }
 
     #[test]
     fn retrieve_vault() {
         {
-            let diceware_wordlist = "res/diceware_wordlist.txt".to_string();
-
-            let p1 = EntryBuilder::new()
-                .name("Github")
-                .username("mygitusername")
-                .generation_method(GenerationMethod::Random(25))
-                .build()
-                .unwrap();
-            let p2 = EntryBuilder::new()
-                .name("Reddit")
-                .username("myemail@mail.com")
-                .generation_method(GenerationMethod::Diceware(diceware_wordlist, 4))
-                .build()
-                .unwrap();
-            let p3 = EntryBuilder::new()
-                .name("Discord")
-                .username("mydiscordusername")
-                .build()
-                .unwrap();
+            let p1 = Entry::new("mygitusername", "foo");
+            let p2 = Entry::new("myemail@mail.com", "bar");
+            let p3 = Entry::new("mydiscordusername", "baz");
 
             let mut vault = Vault::new(VAULT_PASSWD);
 
-            vault.add_password(p1).unwrap();
-            vault.add_password(p2).unwrap();
-            vault.add_password(p3).unwrap();
+            vault.add_password("Github", p1).unwrap();
+            vault.add_password("Reddit", p2).unwrap();
+            vault.add_password("Discord", p3).unwrap();
 
             // open write
             let mut pwdeck_file = OpenOptions::new()
