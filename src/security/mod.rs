@@ -72,10 +72,12 @@ impl<'a> From<&'a str> for SecString {
 
 impl Drop for SecString {
     fn drop(&mut self) {
-        unsafe {
-            ptr::write_volatile(self.data.as_mut_ptr(), 0);
+        if self.data.len() > 0 {
+            unsafe {
+                ptr::write_volatile(self.data.as_mut_ptr(), 0);
+            }
+            self.data.clear();
         }
-        self.data.clear();
     }
 }
 

@@ -96,6 +96,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "byteorder"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae44d1a3d5a19df61dd0c8beb138458ac2a53a7ac09eba97d55592540004306b"
+
+[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -296,6 +302,7 @@ name = "pwdeck"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "byteorder",
  "clap",
  "nanoid",
  "rand 0.8.3",

@@ -3,17 +3,15 @@ use serde::{Deserialize, Serialize};
 pub use crate::generator::{GenerationMethod, Generator};
 use crate::security::SecString;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 // maybe rename it?
 pub enum PasswordError {
     Unknown,
     EmptyPassword,
-    NoNameProvided,
-    NoUsernameProvided,
 }
 
 // TODO: maybe move to vault module as a vault entry
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 /// Stores a password entry
 pub struct Entry {
     id: String,

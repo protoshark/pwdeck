@@ -4,14 +4,15 @@ use std::{
     ops::Deref,
 };
 
-use serde::{Deserialize, Serialize};
-
 use aes_gcm::aead::{Aead, NewAead};
 use aes_gcm::Aes256Gcm;
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use rand::rngs::OsRng;
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 
 use crate::{
+    error::{PwdError, PwdResult},
     password::{Entry, PasswordError},
     security::{SecString, SecVec},
 };
@@ -36,6 +37,82 @@ impl Default for Schema {
         Self {
             passwords: HashMap::new(),
         }
+    }
+}
+
+// TODO: metadata trait?
+// Vault metadata
+struct Metadata {
+    scrypt: ScryptMetadata,
+    nonce: [u8; NONCE_SIZE],
+    salt: [u8; SALT_SIZE],
+}
+#[derive(Debug, Clone, Copy)]
+struct ScryptMetadata {
+    logn: u8,
+    r: u32,
+    p: u32,
+}
+
+impl Metadata {
+    fn read<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
+        // rewind the reader
+        reader.seek(SeekFrom::Start(0))?;
+
+        let scrypt_metadata = ScryptMetadata::read(reader)?;
+
+        let nonce = {
+            let mut nonce = [0; NONCE_SIZE];
+            reader.read_exact(&mut nonce)?;
+            nonce
+        };
+
+        let salt = {
+            let mut salt = [0; SALT_SIZE];
+            reader.read_exact(&mut salt)?;
+            salt
+        };
+
+        Ok(Self {
+            scrypt: scrypt_metadata,
+            nonce,
+            salt,
+        })
+    }
+
+    /// Write the metadata to the writer buffer.
+    /// This includes the salt and other encryption
+    /// informations such as the scrypt params used.
+    fn write<W: Write + Seek>(self, writer: &mut W) -> io::Result<()> {
+        // rewind
+        writer.seek(SeekFrom::Start(0))?;
+
+        writer.write_u8(self.scrypt.logn)?;
+        writer.write_u32::<LittleEndian>(self.scrypt.r)?;
+        writer.write_u32::<LittleEndian>(self.scrypt.p)?;
+
+        writer.write_all(&self.nonce)?;
+        writer.write_all(&self.salt)?;
+
+        Ok(())
+    }
+}
+
+impl ScryptMetadata {
+    fn read<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
+        let logn = reader.read_u8()?;
+        let r = reader.read_u32::<LittleEndian>()?;
+        let p = reader.read_u32::<LittleEndian>()?;
+
+        Ok(Self { logn, r, p })
+    }
+}
+
+impl Into<scrypt::Params> for ScryptMetadata {
+    fn into(self) -> scrypt::Params {
+        println!("{:?}", self);
+        scrypt::Params::new(self.logn, self.r, self.p)
+            .unwrap_or_else(|error| panic!("invalid scrypt params: {}", error))
     }
 }
 
@@ -89,49 +166,41 @@ impl Vault {
     }
 
     /// Try to get the `Vault` from a given file
-    pub fn from_file(vault_file: &mut File, master_password: &str) -> io::Result<Self> {
+    pub fn from_file(vault_file: &mut File, master_password: &str) -> PwdResult<Self> {
+        // read the file and write its content into a `Vec`
         let mut buffer = Vec::new();
         vault_file.read_to_end(&mut buffer)?;
 
+        // create the file reader
         let mut reader = Cursor::new(buffer);
 
-        let mut scrypt_metadata = [0; 3];
-        reader.read_exact(&mut scrypt_metadata)?;
-
-        let scrypt_logn = scrypt_metadata[0];
-        let scrypt_r = scrypt_metadata[1];
-        let scrypt_p = scrypt_metadata[2];
-
-        // TODO: error handling
-        let scrypt_params =
-            scrypt::Params::new(scrypt_logn, u32::from(scrypt_r), u32::from(scrypt_p))
-                .unwrap_or_else(|error| panic!("Scrypt error: {}", error.to_string()));
-
-        let nonce = {
-            let mut nonce = [0; NONCE_SIZE];
-            reader.read_exact(&mut nonce)?;
-            nonce
+        // read the metadata from the file
+        let metadata = match Metadata::read(&mut reader) {
+            Ok(metadata) => metadata,
+            Err(error) => return Err(PwdError::from(error)),
         };
 
-        let salt = {
-            let mut salt = [0; SALT_SIZE];
-            reader.read_exact(&mut salt)?;
-            salt
-        };
-
+        // read the rest of the file
         let encrypted_schema = {
             let mut schema = Vec::new();
             reader.read_to_end(&mut schema)?;
             schema
         };
 
+        // generate the key
         let mut key = vec![0; KEY_SIZE];
         // the key lenght is ok, should not panic
-        scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
+        scrypt::scrypt(
+            master_password.as_bytes(),
+            &metadata.salt,
+            &metadata.scrypt.into(),
+            &mut key,
+        )
+        .unwrap();
 
         let cipher = Aes256Gcm::new(key.deref().as_ref().into());
         let json_schema = cipher
-            .decrypt(&nonce.into(), encrypted_schema.as_ref())
+            .decrypt(&metadata.nonce.into(), encrypted_schema.as_ref())
             .unwrap_or_else(|_error| {
                 panic!("Authentication failed");
             });
@@ -151,11 +220,11 @@ impl Vault {
 
             master_password: master_password.into(),
             key: key.into(),
-            salt,
+            salt: metadata.salt,
 
-            scrypt_logn,
-            scrypt_r: u32::from(scrypt_r),
-            scrypt_p: u32::from(scrypt_p),
+            scrypt_logn: metadata.scrypt.logn,
+            scrypt_r: metadata.scrypt.r,
+            scrypt_p: metadata.scrypt.p,
         };
 
         Ok(vault)
@@ -171,11 +240,9 @@ impl Vault {
             group_entries.push(entry);
         } else {
             // the key doesn't exists so its safe to just unwrap
-            assert!(self
-                .schema
+            self.schema
                 .passwords
-                .insert(String::from(group), vec![entry])
-                .is_none())
+                .insert(String::from(group), vec![entry]);
         }
 
         Ok(())
@@ -186,7 +253,7 @@ impl Vault {
         let schema = serde_json::to_string(&self.schema)?;
 
         // create the aes cipher
-        let key = self.key.deref().as_slice();
+        let key = self.key.deref().deref();
         let cipher = Aes256Gcm::new(key.into());
 
         // generate a random nonce
@@ -204,33 +271,34 @@ impl Vault {
                 panic!("Encryption error: {}", error.to_string());
             });
 
-        // write the vault metadata
-        self.write_metadata(vault_file, nonce)?;
+        // write the metadata
+        let mut writer = Cursor::new(Vec::new());
+        self.metadata(nonce).write(&mut writer)?;
         // write the encrypted schema
-        vault_file.write_all(&schema.as_ref())?;
+        writer.write_all(&schema.as_ref())?;
+
+        // write the buffer content to the vault file
+        // a bit more safe than writing directly into
+        // the file
+        vault_file.write_all(writer.get_ref())?;
 
         Ok(())
     }
 
-    /// Write the vault metadata to the file.
-    /// This includes the salt and other encryption
-    /// informations such as the scrypt params used.
-    /// NOTE: this will erase all the file content
-    pub fn write_metadata(&self, file: &mut File, nonce: [u8; NONCE_SIZE]) -> io::Result<()> {
-        // go to the start of the file
-        file.seek(SeekFrom::Start(0))?;
-        // make sure to erase the content
-        file.set_len(0)?;
-
-        let scrypt_metadata = [self.scrypt_logn, self.scrypt_r as u8, self.scrypt_p as u8];
-
-        file.write_all(&scrypt_metadata)?;
-        file.write_all(&nonce)?;
-        file.write_all(&self.salt)?;
-
-        Ok(())
+    /// Return the vault's metadata
+    fn metadata(&self, nonce: [u8; NONCE_SIZE]) -> Metadata {
+        Metadata {
+            scrypt: ScryptMetadata {
+                logn: self.scrypt_logn,
+                r: self.scrypt_r,
+                p: self.scrypt_p,
+            },
+            nonce,
+            salt: self.salt,
+        }
     }
 
+    /// Schema getter
     pub fn schema(&self) -> &Schema {
         &self.schema
     }
@@ -279,6 +347,14 @@ mod tests {
 
         println!("{:#?}", vault.schema);
         assert_eq!(vault.schema.passwords.len(), 3);
+    }
+
+    #[test]
+    fn empty_password() {
+        let mut vault = Vault::new(VAULT_PASSWD);
+        let entry = Entry::new("test", "");
+
+        assert!(vault.insert_entry("Test", entry).is_err());
     }
 
     #[test]

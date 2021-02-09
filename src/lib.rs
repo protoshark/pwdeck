@@ -1,6 +1,7 @@
 use std::{env, path::Path};
 
 pub mod cli;
+pub mod error;
 mod ffi;
 pub mod generator;
 pub mod password;
