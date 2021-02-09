@@ -5,78 +5,62 @@ use serde::de::{self, Deserialize, Deserializer, Visitor};
 use serde::ser::{Serialize, Serializer};
 
 /// SecVec automatically overwrites its data from memory when dropped
-pub struct SecVec<T> {
-    data: Vec<T>,
-}
-
-impl<T> SecVec<T> {
-    pub fn new(vec: Vec<T>) -> Self {
-        Self { data: vec }
-    }
-}
+pub struct SecVec<T>(Vec<T>);
 
 impl<T> Deref for SecVec<T> {
     type Target = Vec<T>;
 
     fn deref(&self) -> &Self::Target {
-        &self.data
+        &self.0
     }
 }
 
 impl<T> From<Vec<T>> for SecVec<T> {
     fn from(vec: Vec<T>) -> Self {
-        Self::new(vec)
+        Self(vec)
     }
 }
 
 impl<T> Drop for SecVec<T> {
     fn drop(&mut self) {
         unsafe {
-            ptr::write_volatile(self.data.as_mut_ptr() as *mut u8, 0);
+            ptr::write_volatile(self.0.as_mut_ptr() as *mut u8, 0);
         }
-        self.data.clear();
+        self.0.clear();
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 /// SecString automatically overwrites its data from memory when dropped
-pub struct SecString {
-    data: String,
-}
-
-impl SecString {
-    pub fn new(data: String) -> Self {
-        Self { data }
-    }
-}
+pub struct SecString(String);
 
 impl Deref for SecString {
     type Target = String;
 
     fn deref(&self) -> &Self::Target {
-        &self.data
+        &self.0
     }
 }
 
 impl From<String> for SecString {
     fn from(data: String) -> Self {
-        Self::new(data)
+        Self(data)
     }
 }
 
 impl<'a> From<&'a str> for SecString {
     fn from(data: &'a str) -> Self {
-        Self::new(String::from(data))
+        Self(String::from(data))
     }
 }
 
 impl Drop for SecString {
     fn drop(&mut self) {
-        if self.data.len() > 0 {
+        if self.0.len() > 0 {
             unsafe {
-                ptr::write_volatile(self.data.as_mut_ptr(), 0);
+                ptr::write_volatile(self.0.as_mut_ptr(), 0);
             }
-            self.data.clear();
+            self.0.clear();
         }
     }
 }
