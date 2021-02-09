@@ -2,20 +2,21 @@
 
 ![Build status](https://github.com/protoshark/pwdeck/workflows/Rust/badge.svg)
 
-<div style="text-align: center"><img src="./assets/logo.svg" /></div>
+<p align="center"><img src="./assets/logo.svg" /></p>
 
 ## What is this
 
 `pwdeck` is a tool to manage and generate passwords.
 It is designed to be simple and secure.
 
-This project is made with educational purposes, so, it's not recommended for daily usage.
-Feel free to contribute and tell me some good pratices about cryptography and password security.
+This project is made with educational purposes, so, it's not recommended for
+daily usage. Feel free to contribute and tell me some good pratices about
+cryptography and password security.
 
 ## How to use it
 
-`pwdeck` is designed to be simple, the front-end design is not finished yet, and might be changed soon.
-For now, it exposes the `pwdeck` command.
+`pwdeck` is designed to be simple, the front-end design is not finished yet, and
+might be changed soon. For now, it exposes the `pwdeck` command.
 
 ### Generating random passwords
 
@@ -42,8 +43,9 @@ ARGS:
             The generation method (random or diceware) [default: random]
 ```
 
-The `pwdeck generate` command generates a random password for you, and return it to the stdout.
-For exaple, for generating a password with random characters you can run simply run:
+The `pwdeck generate` command generates a random password for you, and return
+it to the stdout. For exaple, for generating a password with random characters
+you can run simply run:
 
 ```
 pwdeck generate
@@ -52,8 +54,9 @@ pwdeck generate
 
 <sup>You can use the `--size` flag to change the password length.</sup>
 
-`pwdeck` also allow you to generate passwords using the [diceware](https://en.wikipedia.org/wiki/Diceware) alghorithm
-(which, in short, rolls some dices and map their values with some word).
+`pwdeck` also allow you to generate passwords using the
+[diceware](https://en.wikipedia.org/wiki/Diceware) alghorithm (which, in short,
+rolls some dices and map their values with some word).
 
 <sup>You need to pass a wordlist file with the `--wordlist` flag.</sup>
 
