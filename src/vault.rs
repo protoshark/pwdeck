@@ -1,8 +1,5 @@
+use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::{collections::HashMap, fs::File};
-use std::{
-    io::{self, Cursor, Read, Seek, SeekFrom, Write},
-    ops::Deref,
-};
 
 use aes_gcm::aead::{Aead, NewAead};
 use aes_gcm::Aes256Gcm;
@@ -198,7 +195,7 @@ impl Vault {
         )
         .unwrap();
 
-        let cipher = Aes256Gcm::new(key.deref().as_ref().into());
+        let cipher = Aes256Gcm::new((*key).into());
         let json_schema = cipher
             .decrypt(&metadata.nonce.into(), encrypted_schema.as_ref())
             .unwrap_or_else(|_error| {
@@ -250,10 +247,8 @@ impl Vault {
 
     /// Sync the passwords with the vault file
     pub fn sync(&self, vault_file: &mut File) -> io::Result<()> {
-        let schema = serde_json::to_string(&self.schema)?;
-
         // create the aes cipher
-        let key = self.key.deref().deref();
+        let key: &[u8] = &self.key;
         let cipher = Aes256Gcm::new(key.into());
 
         // generate a random nonce
@@ -264,7 +259,8 @@ impl Vault {
             nonce
         };
 
-        // encrypt the password
+        let schema = serde_json::to_string(&self.schema)?;
+        // encrypt the schema
         let schema = cipher
             .encrypt(&nonce.into(), schema.as_ref())
             .unwrap_or_else(|error| {
@@ -275,7 +271,7 @@ impl Vault {
         let mut writer = Cursor::new(Vec::new());
         self.metadata(nonce).write(&mut writer)?;
         // write the encrypted schema
-        writer.write_all(&schema.as_ref())?;
+        writer.write_all(&schema)?;
 
         // write the buffer content to the vault file
         // a bit more safe than writing directly into
