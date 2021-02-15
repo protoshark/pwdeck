@@ -1,3 +1,9 @@
+// TODO: 
+//  - CLI tests
+//  - Replace clap? (with a lighweight one)
+//  - Refactory
+//  - Better command interface
+
 use std::{
     fs::{File, OpenOptions},
     io,
@@ -116,6 +122,7 @@ impl<'a> CLI<'a> {
 }
 
 fn handle_generate(args: &clap::ArgMatches) {
+    // parse the password size
     let password_size: Option<usize> = if let Some(size) = args.value_of("size") {
         Some(size.parse().unwrap_or_else(|_| {
             eprintln!("Invalid size: {}", size);
@@ -125,23 +132,25 @@ fn handle_generate(args: &clap::ArgMatches) {
         None
     };
 
+    // parse the generation method
     let generation_method = match args.value_of("method") {
-        Some(generation_method) => match generation_method {
-            "random" => GenerationMethod::Random(password_size.unwrap_or(25)),
-            "diceware" => {
-                let worlist_path = args.value_of("wordlist").unwrap();
-                GenerationMethod::Diceware(worlist_path.to_string(), password_size.unwrap_or(5))
-            }
-            _ => {
-                eprintln!("Invalid generation method: {}", generation_method);
-                std::process::exit(1);
-            }
-        },
-        None => GenerationMethod::Random(password_size.unwrap_or(25)),
+        Some("random") | None => GenerationMethod::Random(password_size.unwrap_or(25)),
+        Some("diceware") => {
+            let worlist_path = args.value_of("wordlist").unwrap();
+            GenerationMethod::Diceware(worlist_path.to_string(), password_size.unwrap_or(5))
+        }
+        Some(other) => {
+            eprintln!("Invalid generation method: {}", other);
+            std::process::exit(1);
+        }
     };
 
-    let password = Generator::from(generation_method).generate().unwrap();
-    print!("{}", password);
+    // generate the password
+    let password_generator = Generator::from(generation_method);
+    let password = password_generator.password().unwrap();
+
+    // print the generated password
+    print!("{}", *password);
 }
 
 fn prompt_master(msg: &'static str) -> io::Result<String> {
@@ -241,14 +250,25 @@ fn handle_get(args: &clap::ArgMatches) {
     let master = prompt_master("master password: ").unwrap();
     let vault = Vault::from_file(&mut vault_file, &master).unwrap();
 
-    if let Some(_id) = args.value_of("id") {
-        // let entries = &vault.schema().passwords;
-        // let entry = entries.iter().find(|a| a.id() == id).unwrap_or_else(|| {
-        //     eprintln!("No entry found with this id.");
-        //     std::process::exit(1);
-        // });
+    if let Some(id) = args.value_of("id") {
+        let groups = &vault.schema().passwords;
 
-        // print!("{}", *entry.password().deref());
+        // search for the entry with the given ID
+        for (_, entries) in groups {
+            if let Some(entry) = entries.iter().find(|a| a.id() == id){
+                // entry found, print its password
+                let password: &String = &entry.password(); // deref cohersion
+                print!("{}", password);
+
+                // exit
+                return;
+            }
+        }
+
+        // exit with error
+        eprintln!("Could not find the given ID");
+        std::process::exit(1);
+
     } else {
         let _filter_service = args.value_of("service");
         let _filter_username = args.value_of("username");
@@ -267,3 +287,5 @@ fn handle_get(args: &clap::ArgMatches) {
         println!("")
     }
 }
+
+

@@ -1,19 +1,19 @@
-use crate::password::PasswordError;
+use crate::{password::PasswordError, security::SecString};
 
 mod diceware;
 mod random;
 
-use diceware::*;
-use random::*;
+use diceware::Diceware;
+use random::Random;
+
+/// Generator trait
+pub trait PasswordGenerator {
+    fn generate(&self) -> Result<SecString, PasswordError>;
+}
 
 pub enum GenerationMethod {
     Random(usize),
     Diceware(String, usize),
-}
-
-/// Generator trait
-pub trait PasswordGenerator {
-    fn generate(&self) -> Result<String, PasswordError>;
 }
 
 /// Password Generator
@@ -22,22 +22,22 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn generate(self) -> Result<String, PasswordError> {
+    pub fn new(generator: Box<dyn PasswordGenerator>) -> Self {
+        Self { generator }
+    }
+
+    pub fn password(self) -> Result<SecString, PasswordError> {
         self.generator.generate()
     }
 }
 
 impl From<GenerationMethod> for Generator {
     fn from(method: GenerationMethod) -> Self {
-        match method {
-            GenerationMethod::Random(length) => {
-                let generator = Box::new(Random::new(length));
-                Self { generator }
-            }
-            GenerationMethod::Diceware(source_path, words) => {
-                let generator = Box::new(Diceware::new(source_path, words));
-                Self { generator }
-            }
-        }
+        let generator: Box<dyn PasswordGenerator> = match method {
+            GenerationMethod::Random(len) => Box::new(Random::new(len)),
+            GenerationMethod::Diceware(wordlist, len) => Box::new(Diceware::new(wordlist, len)),
+        };
+
+        Self::new(generator)
     }
 }

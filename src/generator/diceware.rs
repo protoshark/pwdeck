@@ -5,7 +5,7 @@ use rand::distributions::{self, Distribution};
 use rand::rngs::OsRng;
 
 use super::PasswordGenerator;
-use crate::password::PasswordError;
+use crate::{password::PasswordError, security::SecString};
 
 /// Diceware password generator
 pub struct Diceware {
@@ -22,7 +22,7 @@ impl Diceware {
 }
 
 impl PasswordGenerator for Diceware {
-    fn generate(&self) -> Result<String, PasswordError> {
+    fn generate(&self) -> Result<SecString, PasswordError> {
         let wordlist_file =
             File::open(&self.source_path).expect("Can't open the diceware wordlist");
         let lines: Vec<String> = BufReader::new(&wordlist_file)
@@ -45,7 +45,7 @@ impl PasswordGenerator for Diceware {
         }
         password.pop();
 
-        Ok(password)
+        Ok(SecString::from(password))
     }
 }
 
@@ -63,7 +63,7 @@ mod tests {
         .generate()
         .unwrap();
 
-        println!("{}", diceware_password);
+        println!("{}", *diceware_password);
         assert_eq!(
             diceware_password.split(" ").collect::<Vec<_>>().len(),
             diceware_words

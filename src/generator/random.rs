@@ -1,7 +1,7 @@
 use rand::{rngs::OsRng, Rng};
 
 use super::PasswordGenerator;
-use crate::password::PasswordError;
+use crate::{password::PasswordError, security::SecString};
 
 /// Random password generator
 pub struct Random {
@@ -16,7 +16,7 @@ impl Random {
 }
 
 impl PasswordGenerator for Random {
-    fn generate(&self) -> Result<String, PasswordError> {
+    fn generate(&self) -> Result<SecString, PasswordError> {
         let special_chars = [
             '!', '#', '$', '%', '&', '*', '+', '-', '_', '.', '/', ':', '=', '?', '~', '`',
         ];
@@ -43,7 +43,7 @@ impl PasswordGenerator for Random {
             }
         }
 
-        Ok(password)
+        Ok(SecString::from(password))
     }
 }
 
@@ -56,7 +56,7 @@ mod tests {
         let length = 40;
         let random_password = Random::new(length).generate().unwrap();
 
-        println!("{}", random_password);
+        println!("{}", *random_password);
         assert_eq!(random_password.len(), length);
     }
 
@@ -65,7 +65,7 @@ mod tests {
         let length = 10;
         let random_password = Random::new(length).generate().unwrap();
 
-        println!("{}", random_password);
+        println!("{}", *random_password);
         assert_eq!(random_password.len(), length)
     }
 }

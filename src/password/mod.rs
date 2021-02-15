@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub use crate::generator::{GenerationMethod, Generator};
+pub use crate::generator::Generator;
 use crate::security::SecString;
 
 #[derive(Debug, PartialEq)]
