@@ -23,12 +23,12 @@ const SCRYPT_R: u32 = 8;
 const SCRYPT_P: u32 = 1;
 
 #[derive(Serialize, Deserialize, Debug)]
-/// The `pwdeck` file JSON Schema
-pub struct Schema {
+/// The vault JSON schema
+pub struct VaultSchema {
     pub(crate) passwords: HashMap<String, Vec<Entry>>,
 }
 
-impl Default for Schema {
+impl Default for VaultSchema {
     /// Creates an empty schema
     fn default() -> Self {
         Self {
@@ -37,86 +37,9 @@ impl Default for Schema {
     }
 }
 
-// TODO: metadata trait?
-// Vault metadata
-struct Metadata {
-    scrypt: ScryptMetadata,
-    nonce: [u8; NONCE_SIZE],
-    salt: [u8; SALT_SIZE],
-}
-#[derive(Debug, Clone, Copy)]
-struct ScryptMetadata {
-    logn: u8,
-    r: u32,
-    p: u32,
-}
-
-impl Metadata {
-    fn read<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
-        // rewind the reader
-        reader.seek(SeekFrom::Start(0))?;
-
-        let scrypt_metadata = ScryptMetadata::read(reader)?;
-
-        let nonce = {
-            let mut nonce = [0; NONCE_SIZE];
-            reader.read_exact(&mut nonce)?;
-            nonce
-        };
-
-        let salt = {
-            let mut salt = [0; SALT_SIZE];
-            reader.read_exact(&mut salt)?;
-            salt
-        };
-
-        Ok(Self {
-            scrypt: scrypt_metadata,
-            nonce,
-            salt,
-        })
-    }
-
-    /// Write the metadata to the writer buffer.
-    /// This includes the salt and other encryption
-    /// informations such as the scrypt params used.
-    fn write<W: Write + Seek>(self, writer: &mut W) -> io::Result<()> {
-        // rewind
-        writer.seek(SeekFrom::Start(0))?;
-
-        writer.write_u8(self.scrypt.logn)?;
-        writer.write_u32::<LittleEndian>(self.scrypt.r)?;
-        writer.write_u32::<LittleEndian>(self.scrypt.p)?;
-
-        writer.write_all(&self.nonce)?;
-        writer.write_all(&self.salt)?;
-
-        Ok(())
-    }
-}
-
-impl ScryptMetadata {
-    fn read<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
-        let logn = reader.read_u8()?;
-        let r = reader.read_u32::<LittleEndian>()?;
-        let p = reader.read_u32::<LittleEndian>()?;
-
-        Ok(Self { logn, r, p })
-    }
-}
-
-impl Into<scrypt::Params> for ScryptMetadata {
-    fn into(self) -> scrypt::Params {
-        println!("{:?}", self);
-        scrypt::Params::new(self.logn, self.r, self.p)
-            .unwrap_or_else(|error| panic!("invalid scrypt params: {}", error))
-    }
-}
-
-#[allow(dead_code)]
-/// The Password Vault
+/// The Password vault
 pub struct Vault {
-    schema: Schema,
+    schema: VaultSchema,
 
     // not sure if the master password should be stored
     master_password: SecString,
@@ -128,8 +51,9 @@ pub struct Vault {
     scrypt_p: u32,
 }
 
+/// Safe password vault storage
 impl Vault {
-    /// Creates a new password `Vault`
+    /// Create a new vault with the given master password
     pub fn new(master_password: &str) -> Self {
         let salt = {
             let mut salt = [0; SALT_SIZE];
@@ -150,7 +74,7 @@ impl Vault {
         scrypt::scrypt(master_password.as_bytes(), &salt, &scrypt_params, &mut key).unwrap();
 
         Self {
-            schema: Schema::default(),
+            schema: VaultSchema::default(),
 
             master_password: master_password.into(),
             key: key.into(),
@@ -162,7 +86,7 @@ impl Vault {
         }
     }
 
-    /// Try to get the `Vault` from a given file
+    /// Try to get the vault from a given file
     pub fn from_file(vault_file: &mut File, master_password: &str) -> PwdResult<Self> {
         // read the file and write its content into a `Vec`
         let mut buffer = Vec::new();
@@ -202,7 +126,7 @@ impl Vault {
                 panic!("Authentication failed");
             });
 
-        let schema: Schema = {
+        let schema: VaultSchema = {
             let encoded_schema = String::from_utf8_lossy(&json_schema);
             match serde_json::from_str(&encoded_schema) {
                 Ok(schema) => schema,
@@ -295,8 +219,83 @@ impl Vault {
     }
 
     /// Schema getter
-    pub fn schema(&self) -> &Schema {
+    pub fn schema(&self) -> &VaultSchema {
         &self.schema
+    }
+}
+
+// Metadata about the vault file
+struct Metadata {
+    scrypt: ScryptMetadata,
+    nonce: [u8; NONCE_SIZE],
+    salt: [u8; SALT_SIZE],
+}
+
+impl Metadata {
+    fn read<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
+        // rewind the reader
+        reader.seek(SeekFrom::Start(0))?;
+
+        let scrypt_metadata = ScryptMetadata::read(reader)?;
+
+        let nonce = {
+            let mut nonce = [0; NONCE_SIZE];
+            reader.read_exact(&mut nonce)?;
+            nonce
+        };
+
+        let salt = {
+            let mut salt = [0; SALT_SIZE];
+            reader.read_exact(&mut salt)?;
+            salt
+        };
+
+        Ok(Self {
+            scrypt: scrypt_metadata,
+            nonce,
+            salt,
+        })
+    }
+
+    /// Write the metadata to the writer buffer.
+    /// This includes the salt and other encryption
+    /// informations such as the scrypt params used.
+    fn write<W: Write + Seek>(self, writer: &mut W) -> io::Result<()> {
+        // rewind
+        writer.seek(SeekFrom::Start(0))?;
+
+        writer.write_u8(self.scrypt.logn)?;
+        writer.write_u32::<LittleEndian>(self.scrypt.r)?;
+        writer.write_u32::<LittleEndian>(self.scrypt.p)?;
+
+        writer.write_all(&self.nonce)?;
+        writer.write_all(&self.salt)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ScryptMetadata {
+    logn: u8,
+    r: u32,
+    p: u32,
+}
+
+impl ScryptMetadata {
+    fn read<R: Read + Seek>(reader: &mut R) -> io::Result<Self> {
+        let logn = reader.read_u8()?;
+        let r = reader.read_u32::<LittleEndian>()?;
+        let p = reader.read_u32::<LittleEndian>()?;
+
+        Ok(Self { logn, r, p })
+    }
+}
+
+impl Into<scrypt::Params> for ScryptMetadata {
+    fn into(self) -> scrypt::Params {
+        scrypt::Params::new(self.logn, self.r, self.p)
+            .unwrap_or_else(|error| panic!("invalid scrypt params: {}", error))
     }
 }
 
